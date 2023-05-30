@@ -1,0 +1,3619 @@
+---
+title: "Stimulation Trials Data Processing Parameters"
+author: "Luis Mesias"
+date: "9/2/2021"
+output:
+  html_document: 
+    code_folding: hide
+    number_sections: TRUE
+    toc_float: TRUE
+    toc: TRUE
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+## Importing
+
+```{r, message = FALSE, warning = FALSE}
+library(broom);
+library(equatiomatic);
+library(ggrepel);
+library(janitor);
+library(knitr);
+library(magrittr);
+library(naniar);
+library(patchwork);
+library(rstanarm);
+library(tidyverse);
+library("readxl");
+theme_set(theme_bw())
+```
+
+## Reading Data
+
+Read the data from the three different sections: basic subject data, threshold data, and sensory perception data. 
+```{r}
+subjectRawData <- read_excel("RawData.xlsx", sheet=1) %>%
+  clean_names();
+stimRawData <- read_excel("RawData.xlsx", sheet=2) %>%
+  clean_names();
+pitRawData <- read_excel("RawData.xlsx", sheet=3) %>%
+  clean_names();
+```
+# Exploratory Data Analysis
+
+The following sections are just plots of data created to better understand the data and its trends. 
+
+## All Data
+
+Tables of each of the sections mentioned above 
+
+```{r}
+subjectRawData
+stimRawData
+pitRawData
+```
+
+
+## Basic Subject Data
+
+Shows subject demographics summary. 
+
+```{r}
+ageData <- subjectRawData %>% select(age);
+summary(ageData)
+sexData <- subjectRawData %>% select(sex);
+sexData %>% filter(complete.cases(sex)) %>%
+    ggplot(data = ., aes(x = sex)) +
+    geom_bar(show.legend = TRUE)+
+    labs(title = "Sex at Birth Distribution",
+         y = "Number of Subjects",
+         x = "Sex at Birth") +
+    theme_classic();
+```
+
+## Basic Stimulation Data
+
+Plotting all the data and a liner model with a log transformation yields an inaccurate model. There is a lot of overlapping between maximum and minimum across different locations and subjects. The Box plot show a lot of variability and outliers. The most notable outliers came from subject 9, so I filtered the subject to see if that would improve variability. After removing subject 9, other outliers were still there and the fit did not improve.
+
+```{r}
+stimCurveData <- stimRawData %>% filter(complete.cases(current, min, max))
+stimCurveData %>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold")
+stimCurveData %>% ggplot(., aes(x= current, y =min))+
+  geom_boxplot(aes(group = current))+
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum Pulse Width Stimualtion Threshold")
+stimCurveData %>% filter(subject!=9) %>%ggplot(., aes(x= current, y =min))+
+  geom_boxplot(aes(group = current))+
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum Pulse Width Stimualtion Threshold Subject 9 Filtered")
+stimCurveData %>% ggplot(., aes(x= current, y =max))+
+  geom_boxplot(aes(group = current))+
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Maximum Pulse Width Stimualtion Threshold")
+```
+
+## Filtered By Location
+
+Since all the data creates a overlapping data that cant be described by a single model, I have separated by specific variables in the following sections to see if the fit improves and data stops overlapping. 
+```{r}
+stimCurveData%>% filter(electrode_2=="IPalmA1")%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For IPalmA1")
+stimCurveData%>% filter(electrode_2=="Elbow")%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Elbow")
+stimCurveData%>% filter(electrode_2=="IPalmP1")%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For IPalmP1")
+stimCurveData%>% filter(electrode_1=="IPL")%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For IPL")
+stimCurveData%>% filter(electrode_1=="IIL")%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For IIL")
+stimCurveData%>% filter(electrode_1=="IIA")%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For IIA")
+```
+
+Filtering by location still has overlapping data and a bad fit. 
+
+## Filtered By Subject
+
+```{r}
+stimCurveData%>% filter(subject==1)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 1")
+stimCurveData%>% filter(subject==2)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 2")
+stimCurveData%>% filter(subject==3)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 3")
+stimCurveData%>% filter(subject==4)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 4")
+stimCurveData%>% filter(subject==5)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 5")
+stimCurveData%>% filter(subject==6)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 6")
+stimCurveData%>% filter(subject==8)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 8")
+stimCurveData%>% filter(subject==9)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 9")
+stimCurveData%>% filter(subject==10)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 10")
+stimCurveData%>% filter(subject==11)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 11")
+stimCurveData%>% filter(subject==12)%>% ggplot(., aes(x= current))+
+  geom_point( aes(y=min, col="Min"))+
+  geom_smooth(aes(y=min, x=current), method = "lm", col = "blue",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  geom_point( aes(y=max, col="Max"))+
+  geom_smooth(aes(y=max, x=current), method = "lm", col = "red",
+                formula = y ~ log(x, base = exp(1)), se = FALSE) +
+  labs(x = "Current (mA)",
+         y = "Pulse Width (us)",
+         title = "Minimum and Maximum Pulse Width Stimualtion Threshold For Subject 12")
+```
+
+Filtering by subject also has overlapping data and a bad fit.
+
+# Evaluating Different Hypothesis
+
+## Is there too much variation to use a general model for calibration? 
+
+We would like to evaluate a general model that can fit the data for different subjects and stimulation locations. This model will aid in the calibration process. Such a model will be really useful if this technology is used as a haptic interfaces because it would allow for quick semi automatic calibration. The exploratory analysis showed a lot of overlap and a non linear relationship between pulse width and current amplitude. The log transformation of the data helped but it was lacking fit in the tails of the data.Therefore to get a better fit we will use Louis Lapicque's equation. This equation relies on a rheobase current and a chronaxie to create a strength duration curve fit. This two terms can be obtained from a linear fit of the data after a transformation. The following graph shows the linear fits of the transformed maximum and minimum thresholds and the calculated rheobase and chronaxie for each threshold. Bellow these two linear fit is the resulting strength duration curves for each threshold.   
+
+### Model of all the data
+
+```{r, warning = FALSE}
+tempData <- stimCurveData %>% filter(complete.cases(current, min, max))
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=1100, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1500, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=450, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=200, y=620, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinAll <- glance(m1);
+SummaryMaxAll <- glance(m2);
+```
+
+#### Summary of All Data Model
+
+```{r}
+AllDataModel <- bind_rows(SummaryMinAll, SummaryMaxAll) %>%
+    mutate(model = c("Min", "Max")) %>% relocate(model)
+AllDataModel
+```
+
+The model shows a better fit in the tails when compared to a log transformation linear fit, but the maximum and minimum still have overlap and there is to mach variation. It is important to note that the data used for the linear fit could be explained through multiple linear fits, so we will now explore separating each variable. 
+
+### Model by subject
+
+Here we separate by subject and apply the same process to create the strength duration curve fit. The overlap of minimum and maximum  thresholds is lessened significantly but it is still present on subjects with low dynamic range. The variation does decrease but a single model per subject cant still be use to calibrate different stimualtion location. 
+
+#### Subject 1
+
+```{r, warning = FALSE}
+tempData <- stimCurveData %>% filter(subject==1)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=1100, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1500, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=100, y=250, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=100, y=300, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS1 <- glance(m1);
+SummaryMaxS1 <- glance(m2);
+```
+
+#### Subject 2
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==2)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=175, y=200, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=175, y=250, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=90, y=50, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=90, y=100, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS2 <- glance(m1);
+SummaryMaxS2 <- glance(m2);
+```
+
+#### Subject 3
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==3)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=650, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=850, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=90, y=225, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=90, y=300, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS3 <- glance(m1);
+SummaryMaxS3 <- glance(m2);
+```
+
+
+#### Subject 4
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==4)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=750, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=850, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=150, y=350, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=150, y=425, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS4 <- glance(m1);
+SummaryMaxS4 <- glance(m2);
+```
+
+#### Subject 5
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==5)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=150, y=325, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=150, y=375, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=75, y=200, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=75, y=230, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS5 <- glance(m1);
+SummaryMaxS5 <- glance(m2);
+```
+
+#### Subject 6
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==6)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=150, y=600, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=150, y=700, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=100, y=250, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=100, y=300, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS6 <- glance(m1);
+SummaryMaxS6 <- glance(m2);
+```
+
+#### Subject 8
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==8)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=125, y=525, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=125, y=600, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=100, y=300, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=100, y=325, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS8 <- glance(m1);
+SummaryMaxS8 <- glance(m2);
+```
+
+#### Subject 9
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==9)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=900, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1100, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=125, y=500, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=125, y=620, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS9 <- glance(m1);
+SummaryMaxS9 <- glance(m2);
+```
+
+#### Subject 10
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==10)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=125, y=550, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=125, y=650, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=50, y=50, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=50, y=100, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS10 <- glance(m1);
+SummaryMaxS10 <- glance(m2);
+```
+
+#### Subject 11
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==11)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=600, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=700, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=90, y=250, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=90, y=275, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS11 <- glance(m1);
+SummaryMaxS11 <- glance(m2);
+```
+
+#### Subject 12
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(subject==12)
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=150, y=600, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=150, y=700, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=150, y=300, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=150, y=350, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinS12 <- glance(m1);
+SummaryMaxS12 <- glance(m2);
+```
+#### Summary of Subject Data Models
+
+Min Models
+
+```{r}
+bind_rows(SummaryMinS1, SummaryMinS2, SummaryMinS3, SummaryMinS4, SummaryMinS5, SummaryMinS6, SummaryMinS8, SummaryMinS9, SummaryMinS10, SummaryMinS11, SummaryMinS12) %>%
+    mutate(model = c("MinS1", "MinS2", "MinS3", "MinS4", "MinS5", "MinS6", "MinS8", "MinS9", "MinS10", "MinS11", "MinS12")) %>% relocate(model)
+```
+
+Max Models
+
+```{r}
+bind_rows(SummaryMaxS1, SummaryMaxS2, SummaryMaxS3, SummaryMaxS4, SummaryMaxS5, SummaryMaxS6, SummaryMaxS8, SummaryMaxS9, SummaryMaxS10, SummaryMaxS11, SummaryMaxS12) %>%
+    mutate(model = c("MaxS1", "MaxS2", "MaxS3", "MaxS4", "MaxS5", "MaxS6", "MaxS8", "MaxS9", "MaxS10", "MaxS11", "MaxS12")) %>% relocate(model)
+```
+
+### Model by anode electrode location
+
+Since location still introduces variability, we will now try to group by anode and cathodes. The results are similar bu do have more overlap between thresholds. Similar results suggest that we may need to separate by both location and subject. 
+
+#### IPL Anode
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(electrode_1=="IPL")
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=1100, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1500, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=450, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=200, y=620, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinA1 <- glance(m1);
+SummaryMaxA1 <- glance(m2);
+```
+
+#### IIL Anode
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(electrode_1=="IIL")
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=800, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1000, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=100, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=200, y=200, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinA2 <- glance(m1);
+SummaryMaxA2 <- glance(m2);
+```
+
+#### IIA Anode
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(electrode_1=="IIA")
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=900, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1100, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=100, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=200, y=200, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinA3 <- glance(m1);
+SummaryMaxA3 <- glance(m2);
+```
+
+#### Summary of Anode Data Models
+
+Min Models
+
+```{r}
+bind_rows(SummaryMinA1, SummaryMinA2, SummaryMinA3) %>%
+    mutate(model = c("MinIPL", "MinIIL", "MinIIA")) %>% relocate(model)
+```
+
+Max Models
+
+```{r}
+bind_rows(SummaryMaxA1, SummaryMaxA2, SummaryMaxA3) %>%
+    mutate(model = c("MaxIPL", "MaxIIL", "MaxIIA")) %>% relocate(model)
+```
+
+### Model by cathode electrode location
+
+#### Elbow Cathode
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(electrode_2=="Elbow")
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=1100, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1500, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=450, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=200, y=620, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinC1 <- glance(m1);
+SummaryMaxC1 <- glance(m2);
+```
+
+#### IPalmA1 Cathode
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(electrode_2=="IPalmA1")
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=700, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=800, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=150, y=100, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=150, y=200, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinC2 <- glance(m1);
+SummaryMaxC2 <- glance(m2);
+```
+
+#### IPalmP1 Cathode
+
+```{r, warning = FALSE}
+tempData <- stimCurveData%>% filter(electrode_2=="IPalmP1")
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+p1 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current*max, col="Max"))+
+  geom_smooth(aes(y=current, x=max), method = "lm", col = "red",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=1100, label=paste("IRb=",format(round(irb1, 2), nsmall = 2))) +
+  geom_text(x=200, y=1400, label=paste("Tc=",format(round(tc1, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+m2 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m2)$coefficients[1,1]
+slope=summary(m2)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+p2 <- ggplot(tempData, aes(x= min, y=current*min))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current*min, col="Min"))+
+  geom_smooth(aes(y=current, x=min), method = "lm", col = "blue",
+                formula = y*x ~ x, se = FALSE) +
+  geom_text(x=200, y=100, label=paste("IRb=",format(round(irb2, 2), nsmall = 2))) +
+  geom_text(x=200, y=200, label=paste("Tc=",format(round(tc2, 2), nsmall = 2))) +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+mLapicqueMin <- function(x){~ irb2*(1+(tc2/.x))}
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+p3 <- ggplot(tempData, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_function(fun=mLapicqueMin(min), col = "blue") +
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  geom_function(fun=mLapicqueMax(max), col = "red") +
+  ylim(0, 40) +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+(p2+p1)/p3
+SummaryMinC3 <- glance(m1);
+SummaryMaxC3 <- glance(m2);
+```
+
+#### Summary of Cathode Data Models
+
+Min Models
+
+```{r}
+bind_rows(SummaryMinC1, SummaryMinC2, SummaryMinC3) %>%
+    mutate(model = c("MinElbow", "MinPalmA", "MinPalmP")) %>% relocate(model)
+```
+
+Max Models
+
+```{r}
+bind_rows(SummaryMaxC1, SummaryMaxC2, SummaryMaxC3) %>%
+    mutate(model = c("MaxElbow", "MaxPalmA", "MaxPalmP")) %>% relocate(model)
+```
+
+### Model by electrode setup
+
+In these graphs we separate by electrode setup and not only cathode or anode. We use the same method to calculate the strength duration curve as in the last two sections but have the linear fits in a separate graph to keep it organized. 
+
+#### All Data
+
+When all the subject data is included we observe similar results as in the two previous models, so we will further separate data by subject. These graphs show really good fit especially for the minimum threshold. We think the pulse width limit of the stimulator has affected the fitting process on some of the maximum threshold strength duration curves. Nevertheless the fit is much better than in all previous models. These graphs suggest that a model that uses electrode setup and subjects as different variables could be use to calibrate surface stimulation across multiple subjects and locations. 
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+#### Per Subject
+
+##### Per Subject linear fits
+
+```{r}
+tempData <- stimCurveData %>% mutate(across(where(is.character), as_factor)) %>% mutate(subject = as.character(subject))
+ggplot(tempData, aes(x= min, y=current*min, col = subject, group = subject))+
+  geom_point(alpha=0.8, aes(x=max, y=current*max))+
+  geom_smooth(aes(y=current, x=max), method = "lm",
+                formula = y*x ~ x, se = FALSE) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Max PW")
+ggplot(tempData, aes(x= min, y=current*min, col = subject, group = subject))+
+  geom_point(alpha=0.8, aes(x=min, y=current*min))+
+  geom_smooth(aes(y=current, x=min), method = "lm",
+                formula = y*x ~ x, se = FALSE) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Curren*Pulse Width(mA*us)",
+         title = "IRb and Tc for Min PW")
+```
+
+##### Subject 1
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 1)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 2
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 2)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 3
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 3)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 4
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 4)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 5
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 5)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 6
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 6)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 8
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 8)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 9
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 9)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 10
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 10)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 11
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 11)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+##### Subject 12
+
+```{r , warning = FALSE}
+stimCurveDataME <- stimCurveData %>% filter(subject == 12)
+
+facet <- ggplot(stimCurveDataME, aes(x= min, y=current))+
+  geom_point(alpha=0.3, colour="blue", aes(x=min, y=current, col="Min"))+
+  geom_point(alpha=0.3, colour="red", aes(x=max, y=current, col="Max"))+
+  ylim(0, 40) +
+  xlim(0, 260) +
+  facet_grid(electrode_1 ~ electrode_2, labeller = "label_value") +
+  labs(x = "Pulse Width (us)",
+         y = "Current (mA)",
+         title = "Pulse Width Stimualtion Threshold")
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb1=slope
+tc1=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb2=slope
+tc2=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb3=slope
+tc3=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb4=slope
+tc4=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb5=slope
+tc5=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb6=slope
+tc6=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb7=slope
+tc7=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb8=slope
+tc8=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*max ~ max, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb9=slope
+tc9=intercept/slope
+
+mLapicqueMax <- function(x){~ irb1*(1+(tc1/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb2*(1+(tc2/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb3*(1+(tc3/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb4*(1+(tc4/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb5*(1+(tc5/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb6*(1+(tc6/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb7*(1+(tc7/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb8*(1+(tc8/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+mLapicqueMax <- function(x){~ irb9*(1+(tc9/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, min = 0, max = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMax(stimCurveDataME$max), col = "red")
+
+
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb12=slope
+tc12=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb22=slope
+tc22=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmP1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb32=slope
+tc32=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb42=slope
+tc42=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb52=slope
+tc52=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="IPalmA1", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb62=slope
+tc62=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IPL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb72=slope
+tc72=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIL" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb82=slope
+tc82=intercept/slope
+tempData <- stimCurveDataME%>% filter(electrode_2=="Elbow", electrode_1=="IIA" )
+m1 <- lm(current*min ~ min, data = tempData)
+intercept=summary(m1)$coefficients[1,1]
+slope=summary(m1)$coefficients[2,1]
+irb92=slope
+tc92=intercept/slope
+
+mLapicqueMin <- function(x){~ irb12*(1+(tc12/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb22*(1+(tc22/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb32*(1+(tc32/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmP1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb42*(1+(tc42/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb52*(1+(tc52/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb62*(1+(tc62/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "IPalmA1"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb72*(1+(tc72/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IPL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb82*(1+(tc82/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIL", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+mLapicqueMin <- function(x){~ irb92*(1+(tc92/.x))}
+facet <- facet + geom_function(data = data.frame(current = 0, max = 0, min = 0, electrode_1 = "IIA", electrode_2= "Elbow"), fun=mLapicqueMin(stimCurveDataME$min), col = "blue")
+
+
+print(facet)
+
+```
+
+### A model for calibration that uses electrode setup and subjects as predictors. 
+
+Model used to described minimum threshold
+
+```{r, results = 'asis'}
+tempData <- stimCurveData %>% mutate(across(where(is.character), as_factor)) %>% mutate(subject = as.character(subject))
+m1 <- lm(current*min ~ min*(subject+electrode_1+electrode_2), data = tempData)
+extract_eq(m1, use_coefs = TRUE, wrap = TRUE, terms_per_line = 2)
+```
+
+Model used to describe maximum threshold
+
+```{r, results = 'asis'}
+m2 <- lm(current*max ~ max*(subject+electrode_1+electrode_2), data = tempData)
+extract_eq(m2, use_coefs = TRUE, wrap = TRUE, terms_per_line = 2)
+```
+
+#### Summary of calibration Model
+
+```{r}
+calibrationModel <- bind_rows(glance(m1), glance(m2)) %>%
+    mutate(model = c("Min", "Max")) %>% relocate(model)
+calibrationModel
+```
+
+#### Comparing to the Simple Model
+
+```{r}
+AllDataModel
+```
+
+#### Comparing Residuals of Both Models
+
+
+
+
+## Do Thresholds Change for same Subject and Session?
+
+```{r}
+filterFirstSession <- stimRawData %>% filter(complete.cases(current, min, max, selected))
+filterSecondSession <- pitRawData %>% filter(complete.cases(selected_current, min, max))
+minBefore <- filterFirstSession %>% select(min) %>% rename(minBefore = min)
+maxBefore <- filterFirstSession %>% select(max) %>% rename(maxBefore = max)
+
+diffMinAbs <- abs(filterSecondSession$min - filterFirstSession$min)
+diffMaxAbs <- abs(filterSecondSession$max - filterFirstSession$max)
+diffMax <- filterSecondSession$max - filterFirstSession$max
+diffMin <- filterSecondSession$min - filterFirstSession$min
+
+beforeAfterThresholds <- filterSecondSession %>% select(id, min, max, selected_current) %>% add_column(minBefore, maxBefore, diffMin, diffMax, diffMinAbs, diffMaxAbs);
+beforeAfterThresholds <- beforeAfterThresholds %>% rename(minAfter = min, maxAfter = max, current = selected_current)
+beforeAfterThresholds
+```
+
+### Difference in minimum thresholds
+
+```{r}
+summary(diffMin)
+ggplot(beforeAfterThresholds, aes(x = "", y =diffMin)) +
+  geom_violin(fill = "cyan") +
+  geom_boxplot(fill = "blue", width = 0.4, outlier.size = 3, outlier.color = "red") +
+  coord_flip() +
+  labs(title = "Difference in Minimum thresholds",
+         y = "minAfter-minBefore (us)",
+         x = "trials") 
+```
+
+### Absolute difference in minimum thresholds
+
+```{r}
+summary(diffMinAbs)
+ggplot(beforeAfterThresholds, aes(x = "", y =diffMinAbs)) +
+  geom_violin(fill = "cyan") +
+  geom_boxplot(fill = "blue", width = 0.4, outlier.size = 3, outlier.color = "red") +
+  coord_flip() +
+  labs(title = "Absolute Difference in Minimum thresholds",
+         y = "Abs(minAfter-minBefore) (us)",
+         x = "trials") 
+```
+
+### Difference in maximum thresholds
+
+```{r}
+summary(diffMax)
+ggplot(beforeAfterThresholds, aes(x = "", y =diffMax)) +
+  geom_violin(fill = "cyan") +
+  geom_boxplot(fill = "blue", width = 0.4, outlier.size = 3, outlier.color = "red") +
+  coord_flip() +
+  labs(title = "Difference in Maximum thresholds",
+         y = "maxAfter-maxBefore (us)",
+         x = "trials") 
+```
+
+### Absolute difference in maximum thresholds
+
+```{r}
+summary(diffMaxAbs)
+ggplot(beforeAfterThresholds, aes(x = "", y =diffMaxAbs)) +
+  geom_violin(fill = "cyan") +
+  geom_boxplot(fill = "blue", width = 0.4, outlier.size = 3, outlier.color = "red") +
+  coord_flip() +
+  labs(title = "Absolute Difference in Maximum thresholds",
+         y = "Abs(maxAfter-maxBefore) (us)",
+         x = "trials") 
+```
+
+Maximum Thresholds have a lot more 0 because the before and after are being affected by the stimulator celing effect. The subject is reaching 250 us before and after because their max is being limited by the max of the stimulator. To see the change with our this celing effect affecting the analysis, the following graphs have the difference in maximum thresholds and the absolute difference in maximum thresholds with the 250 us trials excluded. 
+
+### Difference in maximum thresholds 250 trails removed
+
+```{r}
+Removed250 <- beforeAfterThresholds %>% filter(maxAfter != 250, maxBefore != 250)
+summary(Removed250$diffMax)
+ggplot(Removed250, aes(x = "", y =diffMax)) +
+  geom_violin(fill = "cyan") +
+  geom_boxplot(fill = "blue", width = 0.4, outlier.size = 3, outlier.color = "red") +
+  coord_flip() +
+  labs(title = "Difference in Maximum thresholds 250 us cases removed",
+         y = "maxAfter-maxBefore (us)",
+         x = "trials") 
+```
+
+### Absolute difference in maximum thresholds 250 trails removed
+
+```{r}
+summary(Removed250$diffMaxAbs)
+ggplot(Removed250, aes(x = "", y =diffMaxAbs)) +
+  geom_violin(fill = "cyan") +
+  geom_boxplot(fill = "blue", width = 0.4, outlier.size = 3, outlier.color = "red") +
+  coord_flip() +
+  labs(title = "Absolute Difference in Maximum thresholds 250 us cases removed",
+         y = "Abs(maxAfter-maxBefore) (us)",
+         x = "trials") 
+```

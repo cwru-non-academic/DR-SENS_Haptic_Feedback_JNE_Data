@@ -1,0 +1,273 @@
+---
+title: "Results Exploratory Analysis"
+author: "Luis Mesias"
+date: "11/9/2021"
+output:
+  html_document: 
+    code_folding: hide
+    number_sections: TRUE
+    toc_float: TRUE
+    toc: TRUE
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+## Importing
+
+```{r, message = FALSE, warning = FALSE}
+library(broom);
+library(equatiomatic);
+library(ggrepel);
+library(janitor);
+library(knitr);
+library(magrittr);
+library(naniar);
+library(patchwork);
+library(rstanarm);
+library(tidyverse);
+library(forecast)
+library("readxl");
+library(ggforce);
+library(FSA);
+library(ggsignif);
+theme_set(theme_bw())
+std.error <- function(x) sd(x)/sqrt(length(x))
+```
+
+## Reading Data
+
+Read the data from the three different sections: basic subject data, threshold data, and sensory perception data. 
+```{r}
+usefulData <- read_excel("explodata.xlsx", sheet=1) %>%
+  clean_names()%>% 
+  mutate(combination = factor(combination));
+electrodeData <- read_excel("explodata.xlsx", sheet=2) %>%
+  clean_names()%>% 
+  mutate(electrode = factor(electrode), subject = factor(subject));
+combinationData <- read_excel("explodata.xlsx", sheet=3) %>%
+  clean_names()%>% 
+  mutate(combination = factor(combination), subject = factor(subject));
+polarityData <- read_excel("explodata.xlsx", sheet=4) %>%
+  clean_names()%>% 
+  mutate(pulse = factor(pulse), subject = factor(subject), combination = factor(combination));
+polarityData2 <- read_excel("explodata.xlsx", sheet=6) %>%
+  clean_names()%>% 
+  mutate(pulse = factor(pulse), subject = factor(subject), combination = factor(combination));
+statsIntensityData <- read_excel("explodata.xlsx", sheet=8) %>%
+  clean_names()%>% 
+  mutate(metric = factor(metric), stimulation_instensity = factor(stimulation_instensity));
+```
+
+## Data
+```{r}
+polarityData
+```
+
+## Plot
+Electrode Distance
+```{r}
+usefulData %>%
+    ggplot(data = usefulData, mapping = aes(x=inter_electrode_distance, y=useful_ratio, color = factor(combination, levels =c('Finger-Finger', 'Palm-Palm', 'Finger-Palm'))), position =position_dodge(width=1), size =2) +
+    geom_point(size = 4, alpha = 1/2)+
+    geom_smooth(method="lm", se=F)+
+  labs(title = "Useful Ratio with Increasing Inter-Electrode Distance per \n Electrode Combination Type",
+         y = "Useful Ratio (Useful/Total)",
+         x = "Inter-Electrode Distance (Sections)") +
+    scale_color_manual(name="Legend",
+        breaks=c("Finger-Finger", "Palm-Palm", "Finger-Palm"),
+        values = c("Finger-Finger" = "#349beb", "Palm-Palm"="#eb34c3", "Finger-Palm"="#eba534"))+
+    theme(legend.position="bottom")
+ggsave("explo_res.eps")
+```
+
+Electrodes
+```{r}
+electrodeData.sum <- electrodeData %>%
+  group_by(electrode) %>%
+  summarise( 
+    n=n(),
+    mean=mean(percentage),
+    sd=sd(percentage)
+  )
+electrodeData.sum %>%
+    ggplot(data = electrodeData.sum, mapping = aes(x=reorder(electrode, -mean), y=mean)) +
+    geom_bar(stat='identity', fill = "#349beb")+
+    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd), width =0.3)+
+  labs(title = "Percentage of Useful Trials per Total Trials for Each Electrode Position",
+         y = "Useful Average Percentage (%)",
+         x = "Electrode Postion")+
+  theme(axis.text = element_text(size = 11))   
+ggsave("explo_res_elec.eps")
+```
+
+Combinations
+```{r}
+combinationData.sum <- combinationData %>%
+  group_by(combination) %>%
+  summarise( 
+    n=n(),
+    mean=mean(percentage),
+    sd=sd(percentage)
+  )
+combinationData.sum %>%
+    ggplot(data = combinationData.sum, mapping = aes(x=reorder(combination, -mean), y=mean)) +
+    geom_bar(stat='identity', fill = "#349beb")+
+    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd), width =0.3)+
+    labs(title = "Percentage of Useful Trials per Total Trials for Each Electrode Combination",
+         y = "Useful Average Percentage (%)",
+         x = "Electrode Combination")+
+  theme(axis.text = element_text(size = 11))
+ggsave("explo_res_combination.eps")
+```
+
+Polarity
+```{r}
+polarityData.sum <- polarityData %>%
+  group_by(combination, pulse) %>%
+  summarise( 
+    n=n(),
+    mean=mean(percentage),
+    sd=sd(percentage),
+    combination=combination,
+    pulse=pulse
+  )
+```
+
+Normality test polarity
+```{r}
+p1 <- ggplot(polarityData, aes(x = percentage)) +
+    geom_histogram(fill = "slateblue", col = "white", 
+                   binwidth = 1) + 
+    labs(x = "percentage") +
+    theme_bw()
+
+p2 <- ggplot(polarityData, aes(sample = percentage)) +
+    geom_qq(col = "slateblue") + geom_qq_line(col = "red") + 
+    labs(y = "percentage") +
+    theme_bw()
+
+p3 <- ggplot(polarityData, aes(x = "", y = percentage)) +
+    geom_violin() + 
+    geom_boxplot(fill = "slateblue", width = 0.3, notch = TRUE) + 
+    labs(y = "percentage",
+         x = "") +
+    theme_bw() + 
+    coord_flip()
+
+p1 + p2 - p3 +
+  plot_layout(ncol = 1, height = c(3, 2))
+```
+data is not normally distributed
+
+performing a Kruskal-Wallis test to check that polairty independence is statistically significant 
+
+```{r}
+polarityData.f <- polarityData2 %>%
+  group_by(pulse) %>%
+  summarise(
+    count = n(),
+    mean = mean(useful_for_polarity, na.rm = TRUE),
+    sd = sd(useful_for_polarity, na.rm = TRUE),
+    median = median(useful_for_polarity, na.rm = TRUE),
+    useful_for_polarity= useful_for_polarity
+  )
+
+polarityData.f
+
+kruskal.test(useful_for_polarity ~ pulse, data = polarityData.f)
+
+dunnTest(useful_for_polarity ~ pulse, data=polarityData.f,method="bonferroni")
+```
+
+performing a Kruskal-Wallis test to check that polairty independence is statistically significant by group
+
+```{r}
+polarityData.f <- polarityData %>%
+  group_by(pulse) %>%
+  summarise(
+    count = n(),
+    mean = mean(useful_for_polarity, na.rm = TRUE),
+    sd = sd(useful_for_polarity, na.rm = TRUE),
+    median = median(useful_for_polarity, na.rm = TRUE),
+    useful_for_polarity= useful_for_polarity
+  )
+
+polarityData.f
+
+kruskal.test(useful_for_polarity ~ pulse, data = polarityData.f)
+
+dunnTest(useful_for_polarity ~ pulse, data=polarityData.f,method="bonferroni")
+```
+
+
+```{r}
+polarityData.sum %>%
+    ggplot(data = polarityData.sum, mapping = aes(x=combination, y=mean, fill = factor(pulse, levels =c('Anodic', 'Cathodic', 'Neither(Same area)', 'Useful')))) +
+    geom_bar(stat='identity',position = position_dodge(width=0.9))+
+    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd),position = position_dodge(width=0.9), width =0.3)+
+  labs(title = "Polarity Dependent (PD) and Indepndent (PI) Trials per Electrode Combination",
+         y = "Average percentage of trials with useful percepts (%)",
+         x = "Electrode Combination")+
+  scale_fill_manual(name="",
+        breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
+        values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
+        labels=c("PD Cathodic pulse on\nmore distal electrode", "PD Cathodic pulse on\nmore proximal electrode" , "PD Cathode/anode on same\nphalange or palm region", "PI useful\ntrials"))+
+  theme(legend.position="bottom",axis.text = element_text(size = 11))
+ggsave("explo_res_polarityComb.eps")
+
+polarityDataSub.sum <- polarityData %>%
+  group_by(subject, pulse) %>%
+  summarise( 
+    n=n(),
+    mean=mean(percentage),
+    sd=sd(percentage),
+    subject=subject,
+    pulse=pulse
+  )
+
+polarityDataSub.sum %>%
+    ggplot(data = polarityDataSub.sum, mapping = aes(x=subject, y=mean, fill = factor(pulse, levels =c('Anodic', 'Cathodic', 'Neither(Same area)', 'Useful')))) +
+    geom_bar(stat='identity',position = position_dodge(width=0.9))+
+    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd),position = position_dodge(width=0.9), width =0.3)+
+  labs(title = "Polarity Dependent (PD) and Indepndent (PI) Trials for each Subject",
+         y = "Average percentage of trials with useful percepts (%)",
+         x = "Subject")+
+  scale_fill_manual(name="",
+        breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
+        values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
+        labels=c("PD Cathodic pulse on\nmore distal electrode", "PD Cathodic pulse on\nmore proximal electrode" , "PD Cathode/anode on same\nphalange or palm region", "PI useful\ntrials"))+
+  theme(legend.position="bottom",axis.text = element_text(size = 11))
+ggsave("explo_res_polaritySub.eps")
+```
+
+stats data plot
+
+```{r}
+statsIntensityData %>%
+    ggplot(data = statsIntensityData, mapping = aes(x=metric, y=mean, fill = factor(stimulation_instensity, levels =c('Perception Threshold', 'Maximum Comfortable')))) +
+    geom_point(data = statsIntensityData, position =position_dodge(width=0.5), size = 3, mapping = aes(x=metric, y=mean, color = factor(stimulation_instensity, levels =c('Perception Threshold', 'Maximum Comfortable'))))+
+      geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd, color = factor(stimulation_instensity, levels =c('Perception Threshold', 'Maximum Comfortable'))), width =0.4, position =position_dodge(width=0.5))+
+  geom_signif(xmin=c(0.875, 1.875, 2.875), xmax=c(1.125, 2.125, 3.125),
+                              y_position=c(3, 3.75, 2), annotation=c("***", "***","*")) +
+    labs(title = "The effects of Stimulation Intensity Across All Electrodes and Subjects",
+         y = "Sensation Location (phalanges)",
+         x = "Metric") +
+      ylim(-0.5,4)+
+    scale_fill_manual(name="Pulse Width",
+        breaks=c("Perception Threshold", "Maximum Comfortable"),
+        values = c("Perception Threshold" = "#4C46FF", "Maximum Comfortable"="#FF3939"))+
+      scale_color_manual(name="Pulse Width",
+        breaks=c("Perception Threshold", "Maximum Comfortable", "Active Electrode"),
+        values = c("Perception Threshold" = "#4C46FF", "Maximum Comfortable"="#FF3939"))+
+  guides(fill = guide_legend(override.aes = list(shape = 21)), shape = "none")+
+      theme(legend.position = "bottom")
+  
+  ggsave("Stats_All_Envelopes.eps")
+```
+
+

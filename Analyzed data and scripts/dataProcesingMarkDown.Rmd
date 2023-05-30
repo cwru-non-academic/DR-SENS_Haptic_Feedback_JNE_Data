@@ -1,0 +1,1086 @@
+---
+title: "Stimulation Trials Image Data Processing"
+author: "Luis Mesias"
+date: "9/2/2021"
+output:
+  html_document: 
+    code_folding: hide
+    number_sections: TRUE
+    toc_float: TRUE
+    toc: TRUE
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+## Importing
+
+```{r, message = FALSE, warning = FALSE}
+library(broom);
+library(equatiomatic);
+library(ggrepel);
+library(janitor);
+library(knitr);
+library(magrittr);
+library(naniar);
+library(patchwork);
+library(rstanarm);
+library(tidyverse);
+library("readxl");
+library(ggforce);
+library(rstatix);
+theme_set(theme_bw())
+```
+
+## Reading Data
+
+Read the data from the three different sections: basic subject data, threshold data, and sensory Threshold data. 
+```{r}
+subjectRawData <- read_excel("RawData.xlsx", sheet=1) %>%
+  clean_names();
+stimRawData <- read_excel("RawData.xlsx", sheet=2) %>%
+  clean_names();
+pitRawData <- read_excel("RawData.xlsx", sheet=3) %>%
+  clean_names();
+```
+
+# Hypothesis
+
+Stimulating using electrodes located in the palm and fingers can generate a distal sensation while limiting the sensation to the targeted finger. 
+
+Increasing stimulation intensity produces a more distal sensation and increases area of the sensation. 
+
+Increasing the surface area of the return electrode and placing it at a distant location from the active electrode will mitigate return electrode sensation and help bound the sensation the targeted finger. 
+
+# Electrode Locations and Acronim Reference
+
+## Acronyms
+
+Return Electrodes:
+
+Elb-Elbow
+\  
+
+PA1-Palm's Anterior Face Electrode 1/3*
+\  
+
+PP1-Palm's Posterior Face Electrode 1/3*
+\  
+
+* The x/3 represents whihc of the thre electrode in each side of the palm it is. In the exploratory trials all three electrodes where evaluated, but the electrode closest (1) to the index performed better. Due to their better performance, only the first out of the three electrodes in each face of the palm were evaluated.
+
+\  
+
+Active Electrode:
+
+PL-Proximal Phalange's Lateral Face Electrode
+\  
+
+IL-Intermediate Phalange's Lateral Face Electrode
+\  
+
+IA-Intermediate Phalange's Anterior Face Electrode
+\  
+
+## Location of the Electrodes
+
+![](labeledA.jpg){#id .class width=200 height=160px}![](labeledP.jpg){#id .class width=200 height=160px}![](labeledL.jpg){#id .class width=200 height=160px}
+\  
+
+# Exploratory Data Analysis
+
+The following sections are just plots of data created to better understand the data and its trends. 
+
+## All Data
+
+Tables of each of the sections mentioned above 
+
+```{r}
+subjectRawData
+stimRawData
+pitRawData
+```
+
+## Basic Subject Data
+
+Shows subject demographics summary. 
+
+```{r}
+ageData <- subjectRawData %>% select(age);
+summary(ageData)
+sexData <- subjectRawData %>% select(sex);
+sexData %>% filter(complete.cases(sex)) %>%
+    ggplot(data = ., aes(x = sex)) +
+    geom_bar(show.legend = TRUE)+
+    labs(title = "Sex at Birth Distribution",
+         y = "Number of Subjects",
+         x = "Sex at Birth") 
+    #theme_classic()
+```
+
+## Analysis of Sensation Location
+
+### Do Higher Stimualtion Parameters Elicit a more Distal Sensation?
+
+```{r message = FALSE}
+centroidData <- read_csv("centroid_data.csv")%>%
+  clean_names() %>% 
+  mutate(location = factor(location)) %>%
+  mutate(subject = factor(subject)) %>%
+  #filter(subject %in% c("01", "02", "03", "04", "10", "11", "12")) %>%
+  mutate(temp1 = case_when(
+        strenght == 2 ~ "Maximum Comfortable",
+        strenght == 1 ~ "Perception Threshold"),
+        strenghtCAT = factor(temp1)) %>%
+  mutate(temp2 = case_when(
+        location == 1 ~ "PL|PA1",
+        location == 2 ~ "IL|PA1",
+        location == 3 ~ "IA|PA1",
+        location == 4 ~ "PL|Elb",
+        location == 5 ~ "IL|Elb",
+        location == 6 ~ "IA|Elb",
+        location == 7 ~ "PL|PP1",
+        location == 8 ~ "IL|PP1",
+        location == 9 ~ "IA|PP1"),
+        locationCAT = factor(temp2)) %>%
+  mutate(temp3 = case_when(
+        location == 1 ~ "PL",
+        location == 2 ~ "IL",
+        location == 3 ~ "IA",
+        location == 4 ~ "PL",
+        location == 5 ~ "IL",
+        location == 6 ~ "IA",
+        location == 7 ~ "PL",
+        location == 8 ~ "IL",
+        location == 9 ~ "IA"),
+        ActiveElectrode = factor(temp3)) %>%
+  mutate(temp4 = case_when(
+        location == 1 ~ "PA1",
+        location == 2 ~ "PA1",
+        location == 3 ~ "PA1",
+        location == 4 ~ "Elb",
+        location == 5 ~ "Elb",
+        location == 6 ~ "Elb",
+        location == 7 ~ "PP1",
+        location == 8 ~ "PP1",
+        location == 9 ~ "PP1"),
+        ReturnElectrode = factor(temp4)) %>%
+  mutate(temp5 = case_when(
+        max >= 80 ~ 1,
+        max < 80 ~ 0),
+        distal = temp5) %>%
+  mutate(temp6 =strenght*distal,
+    distalByStrenght = temp6)%>%
+  select(locationCAT, strenghtCAT, centroid, subject, ReturnElectrode, ActiveElectrode, min, max, distal,distalByStrenght);
+  centroidData
+  centroidData.summary <- centroidData %>%
+    group_by(locationCAT, strenghtCAT) %>%
+    summarise (
+      aveMin= mean(min/55),
+      aveMax = mean(max/55),
+      aveCentroid = mean(centroid/55),
+      circR= (aveMax-aveMin)/2,
+      circC= aveMin+circR,
+      sd = sd(centroid/55)
+    )
+  
+  centroidData.summaryD <- centroidData %>%
+    group_by(locationCAT, subject) %>%
+    summarise (
+      distalSum= sum(distal),
+      distalSumBS= sum(distalByStrenght)) %>%
+    mutate(temp1 = case_when(
+        distalSum == 0 ~ "None",
+        distalSum == 1 ~ "Either",
+        distalSum == 2 ~ "Both"),
+        distalCAT = factor(temp1)) %>%
+    mutate(temp2 = case_when(
+        distalSumBS == 0 ~ "None",
+        distalSumBS == 1 ~ "Perception",
+        distalSumBS == 2 ~ "Maximum",
+        distalSumBS == 3 ~ "Both"),
+        distalBySCAT = factor(temp2))
+  # centroidData %>%
+  #   ggplot() +
+  #   geom_linerange(data = centroidData.summary, mapping = aes(x=locationCAT, ymin= aveMin, ymax=aveMax, color = factor(strenghtCAT, levels =c('Threshold', 'Maximum Comfortable'))),  position = position_dodge(width=1), size =4)+
+  #   geom_linerange(data = centroidData.summary, mapping = aes(x=locationCAT, ymin= aveCentroid-0.01, ymax=aveCentroid+0.01, group= factor(strenghtCAT, levels =c('Threshold', 'Maximum Comfortable'))),position =position_dodge(width=1), size =4)+
+  #   labs(title = "Vertical Centroid and Envelope of all Sensations for All Electrode Combinations",
+  #        y = "Sensation Location (phalanges)",
+  #        x = "Electrode Locations",
+  #        #caption = "0px is center of proximal phalange",
+  #        color = "Strenght") +
+  #   scale_color_manual(values = c("#4C46FF", "#FF3939"))+
+  #   theme_classic();
+  #c(1,25, 0.75, 2.25, 1.75, 3.25, 2.75, 4.25, 3.75, 5.25, 4.75, 6.25, 5.75, 7.25, 6.75, 8.25, 7.75, 9.25, 8.75)
+  
+  centroidData.summary <- centroidData %>%
+    group_by(locationCAT, strenghtCAT) %>%
+    summarise (
+      Proximal= mean(min/55),
+      Distal = mean(max/55),
+      VerticalCentroid = mean(centroid/55),
+      ProximalSD=sd(min/55),
+      DistalSD = sd(max/55),
+      VerticalCentroidSD = sd(centroid/55)
+    )
+    centroidData.summary <- centroidData.summary %>%
+      pivot_longer(Proximal:VerticalCentroid, names_to="metric", values_to="sensation_location") %>%
+      mutate(metric = factor(metric)) %>%
+      pivot_longer(ProximalSD:VerticalCentroidSD, names_to="metricSD", values_to="sensation_locationSD") %>%
+      mutate(metricSD = factor(metricSD))
+    centroidData.prox <- subset(centroidData.summary, metric=="Proximal" & metricSD=="ProximalSD")
+    centroidData.cent <- subset(centroidData.summary, metric=="VerticalCentroid" & metricSD=="VerticalCentroidSD")
+    centroidData.dist <- subset(centroidData.summary, metric=="Distal" & metricSD=="DistalSD")
+    centroidData.summary <- rbind(centroidData.prox, centroidData.cent, centroidData.dist)
+    
+    centroidData.summary %>%
+    ggplot(data = centroidData.summary, mapping = aes(x=locationCAT, y=sensation_location, fill = factor(strenghtCAT, levels =c('Perception Threshold', 'Maximum Comfortable')), shape = factor(metric, level=c("Distal", "VerticalCentroid","Proximal")))) +
+    geom_point(position =position_dodge(width=0.5), size = 3)+
+      geom_errorbar(mapping =aes(ymin=sensation_location-sensation_locationSD, ymax=sensation_location+sensation_locationSD, color = factor(strenghtCAT, levels =c('Perception Threshold', 'Maximum Comfortable'))), width =0.4, position =position_dodge(width=0.5))+
+    geom_segment(x=0, y=1, xend=6.49, yend=1, size= 0.7, color = "#EBA134")+
+    geom_segment(x=6.51, y=0, xend=9.8, yend=0, size= 0.7, color = "#EBA134")+
+    geom_vline(xintercept= 1.5, size=0.5)+
+    geom_vline(xintercept= 2.5, size=0.5)+
+    geom_vline(xintercept= 3.5, size=0.5)+
+      geom_vline(xintercept= 4.5, size=0.5)+
+      geom_vline(xintercept= 5.5, size=0.5)+
+      geom_vline(xintercept= 6.5, size=0.5)+
+      geom_vline(xintercept= 7.5, size=0.5)+
+      geom_vline(xintercept= 8.5, size=0.5)+
+    labs(title = "Average Metrics of the Sensations for All Electrodes and Subjects",
+         y = "Sensation Location (phalanges)",
+         x = "Electrode Combinations") +
+      ylim(-1.9,2.9)+
+    scale_fill_manual(name="Pulse Width",
+        breaks=c("Perception Threshold", "Maximum Comfortable", "Active Electrode"),
+        values = c("Perception Threshold" = "#4C46FF", "Maximum Comfortable"="#FF3939",  "Active Electrode"="#EBA134"))+
+      scale_color_manual(name="Pulse Width",
+        breaks=c("Perception Threshold", "Maximum Comfortable", "Active Electrode"),
+        values = c("Perception Threshold" = "#4C46FF", "Maximum Comfortable"="#FF3939",  "Active Electrode"="#EBA134"))+
+    scale_shape_manual(name="Metric", breaks=c("VerticalCentroid", "Distal", "Proximal"),
+        values = c("VerticalCentroid"=21, "Distal" = 25, "Proximal"=24))+
+      #annotate(geom="text", x=5.5, y=1.09, label="Active", color="#EBA134")+
+      #annotate(geom="text", x=5.5, y=0.93, label="Electrode", color="#EBA134")+
+      #guides(fill = guide_legend(override.aes = list(shape = 21)))+
+      guides(fill = guide_legend(override.aes = list(shape = 21)), shape = "none")+
+      theme(legend.position = "bottom")
+  
+  ggsave("All_Envelopes.png")
+    
+    centroidData.summaryS <- centroidData %>%
+      filter(subject=="4") %>%
+    group_by(locationCAT, strenghtCAT) %>%
+    summarise (
+      Proximal= mean(min/55),
+      Distal = mean(max/55),
+      VerticalCentroid = mean(centroid/55)
+    )
+    centroidData.summarySS <- centroidData.summaryS %>%
+      pivot_longer(Proximal:VerticalCentroid, names_to="metric", values_to="sensation_location") %>%
+      mutate(metric = factor(metric))
+
+    centroidData.summarySS %>%
+    ggplot() +
+    geom_point(data = centroidData.summarySS, mapping = aes(x=locationCAT, y=sensation_location, fill = factor(strenghtCAT, levels =c('Perception Threshold', 'Maximum Comfortable')), shape = factor(metric, level=c("Distal", "VerticalCentroid","Proximal"))), position =position_dodge2(w=0.5), size =2)+
+    geom_segment(x=0, y=1, xend=6.49, yend=1, size= 0.7, color = "#EBA134")+
+    geom_segment(x=6.51, y=0, xend=9.8, yend=0, size= 0.7, color = "#EBA134")+
+     geom_vline(xintercept= 1.5, size=0.5)+
+    geom_vline(xintercept= 2.5, size=0.5)+
+    geom_vline(xintercept= 3.5, size=0.5)+
+      geom_vline(xintercept= 4.5, size=0.5)+
+      geom_vline(xintercept= 5.5, size=0.5)+
+      geom_vline(xintercept= 6.5, size=0.5)+
+      geom_vline(xintercept= 7.5, size=0.5)+
+      geom_vline(xintercept= 8.5, size=0.5)+
+    labs(title = "Metrics of one Subject's Sensations for All Electrodes",
+         y = "Sensation Location (phalanges)",
+         x = "Electrode Combinations") +
+      ylim(-1.9,2.9)+
+    scale_fill_manual(name="Pulse Width",
+        breaks=c("Perception Threshold", "Maximum Comfortable"),
+        values = c("Perception Threshold" = "#4C46FF", "Maximum Comfortable"="#FF3939"))+
+    scale_shape_manual(name="Metric", breaks=c("VerticalCentroid", "Distal", "Proximal"),
+        values = c("VerticalCentroid"=21, "Distal" = 25, "Proximal"=24))+
+      #annotate(geom="text", x=5.5, y=1.09, label="Active", color="#EBA134")+
+      #annotate(geom="text", x=5.5, y=0.93, label="Electrode", color="#EBA134")+
+      guides(fill = "none")+
+      theme(legend.position = "bottom")
+    
+    ggsave("S4_Envelopes.png")
+    
+  centroidData %>%
+    ggplot() +
+    geom_tile(data = centroidData.summaryD, mapping = aes(x=locationCAT, y=subject, fill= distalBySCAT))+
+      labs(title = "Sensations with Distal Aspects at Perception Threshold, \n Maximum Comfortable Limit, or Both.",
+         y = "Subjects",
+         x = "Electrode Locations",
+         fill = "Distal aspect at")+
+      scale_fill_manual(name="Distal Aspects at",
+        breaks=c("None", "Perception", "Maximum", "Both"),
+        values = c("None" = "#ffffff", "Perception"="#4C46FF", "Maximum" = "#FF3939","Both" = "#8fe3a5"))
+  
+  ggsave("distal_sens_subj.png")
+```
+
+From Threshold to maximum comfortable threshold, the average vertical centroid becomes more proximal, the envelope expands, and the average proximal and distal envelope boundaries become more proximal and distal respectively across all locations. 
+
+\  
+
+#### Does Sensation Become more Distal as Stimualtion Strenght is Increased?
+
+Vertical Centroid (in average)
+```{r}
+minSel <- centroidData %>% filter(strenghtCAT == "Perception Threshold") %>% select(centroid);
+maxSel <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable") %>% select(centroid);
+minAll <- centroidData %>% filter(strenghtCAT == "Perception Threshold");
+maxAll <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable");
+mean(minSel$centroid)
+sd(minSel$centroid)
+mean(maxSel$centroid)
+sd(maxSel$centroid)
+centroidData %$% t.test(centroid ~ strenghtCAT, paired = TRUE, conf.level = 0.95)
+wilcox.test(centroid ~ strenghtCAT,data = centroidData,paired = TRUE,alternative = "less")
+```
+\  
+Most Distal Sensation
+```{r}
+minSel <- centroidData %>% filter(strenghtCAT == "Perception Threshold") %>% select(max);
+maxSel <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable") %>% select(max);
+mean(minSel$max)
+sd(minSel$max)
+mean(maxSel$max)
+sd(maxSel$max)
+centroidData %$% t.test(max ~ strenghtCAT, paired = TRUE, conf.level = 0.95)
+wilcox.test(max ~ strenghtCAT,data = centroidData,paired = TRUE,alternative = "greater")
+```
+
+The 95% confidence interval of the paired t-test comparing average vertical centroid does not cross zero (-22.41, -4.93), so the average vertical centroid for the Threshold threshold is statistically greater than the maximum comfortable threshold average vertical centroid. The 95% confidence interval of the paired t-test comparing average distal envelope bound does not cross zero (14.89, 31.73), so the Threshold threshold's average distal envelope bound is statistically less than the distal envelope bound for the maximum comfortable threshold. From the t-test and the graphs, the sensation on average becomes more proximal as stimulation strength is increased, but the distal boundary of the envelop becomes more distal as stimulation strength increases.  
+\  
+
+#### Clinically Significant Difference in Most Distal Sensation Between Threshold Threshold and Maximum Comfortable Threshold
+
+```{r}
+diff = maxSel-minSel
+total <- nrow(diff)
+diff <- diff %>% filter(diff >= 50)
+sig <- nrow(diff)
+```
+Number of observations with a change in the distal envelop boundary as stimualtion increases of at least one phalange. 
+
+Total Observations: `r toString(total)`
+
+Significant Observations: `r toString(sig)`
+
+Percentage: `r toString(100*sig/total)`%
+
+25% of the observations became more distal by at least one phalange. 
+
+\  
+
+#### How Many More Subjects had Clinically Significant Distal Sensations When Comparing Sensation Locations at Threshold Threshold and Maximum Comfortable Threshold
+
+```{r}
+minAll75 <- minAll %>% filter(max >= 75)
+sigMin <- nrow(minAll75)
+maxAll75 <- maxAll %>% filter(max >= 75)
+sigMax <- nrow(maxAll75)
+```
+Number of observations with a sensation in the distal phalange at the Threshold threshold and the maximum comfortable threshold
+
+Threshold threshold clinically significant trials: `r toString(sigMin)`
+
+Maximum comfortable threshold clinically significant trials: `r toString(sigMax)`
+
+Difference:`r toString(sigMax-sigMin)`
+
+78.7% of the trials reported a sensation in the distal phalange at maximum comfortable threshold compared to 61.6% at Threshold threshold (17.1% more).
+
+\  
+
+Table with clinically significant observations for Threshold threshold
+```{r}
+minAll75
+```
+
+\  
+
+Table with clinically significant observations For maximum comfortable threshold
+```{r}
+maxAll75
+```
+
+Subjects with clinically significant observations at Threshold threshold: 2,3,4,5,6,8,9,10,11,12
+
+Subjects with clinically significant observations at maximum comfortable threshold: 1,2,3,4,5,6,8,9,10,11,12
+
+Difference:1
+
+At maximum comfortable threshold, all subjects reported a sensation on the distal phalange in at least one of the electrode combinations. 
+
+\  
+
+#### Does the Sensation Envelop Size Increase as Stimulation Strenght in Increased?
+
+```{r}
+mean(minAll$max-minAll$min)
+sd(minAll$max-minAll$min)
+mean(maxAll$max-maxAll$min)
+sd(maxAll$max-maxAll$min)
+centroidData %$% t.test(max-min ~ strenghtCAT, paired = TRUE, conf.level = 0.95)
+wilcox.test(max-min ~ strenghtCAT,data = centroidData,paired = TRUE,alternative = "greater")
+```
+
+With statistical significance, the envelop size increased as stimulation strength increased by an average of 72px or 1.44 phalanges.
+
+\  
+Normality test centroid
+```{r}
+p1 <- ggplot(centroidData, aes(x = centroid)) +
+    geom_histogram(fill = "slateblue", col = "white", 
+                   binwidth = 1) + 
+    labs(x = "Centroid") +
+    theme_bw()
+
+p2 <- ggplot(centroidData, aes(sample = centroid)) +
+    geom_qq(col = "slateblue") + geom_qq_line(col = "red") + 
+    labs(y = "Centroid") +
+    theme_bw()
+
+p3 <- ggplot(centroidData, aes(x = "", y = centroid)) +
+    geom_violin() + 
+    geom_boxplot(fill = "slateblue", width = 0.3, notch = TRUE) + 
+    labs(y = "Centroid",
+         x = "") +
+    theme_bw() + 
+    coord_flip()
+
+p1 + p2 - p3 +
+  plot_layout(ncol = 1, height = c(3, 2))
+```
+### Is There A Statistically Significant Difference In the Vertical Centroid and Envelope of the Sensation Across Different Electrode Locations?
+
+
+
+Two way anova of max sensation threshold average vertical centroid
+```{r}
+two.way <- aov(centroid ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(centroid ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(centroid ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average vertical centroid
+```{r}
+two.wayMin <- aov(centroid ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(centroid ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(centroid ~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+Two way anova of max sensation threshold average most distal sensation
+```{r}
+two.way <- aov(max ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(max ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(max ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average most distal sensation
+```{r}
+two.wayMin <- aov(max ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(max ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(max ~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+Tukey test to compare active and return electrode categories in min sensation threshold
+```{r}
+TukeyHSD(two.wayMin)
+```
+
+Two way anova of max sensation threshold average most proximal sensation
+```{r}
+two.way <- aov(min ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(min ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(min ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average most proximal sensation
+```{r}
+two.wayMin <- aov(min ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(min ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(min~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+None of the different electrode placements show a statistically significant difference in vertical centroid or envelope. The most significant difference is when observing the proximal bound of the sensation at the maximum comfortable threshold. The difference between the palm anterior 1 and the elbow return electrode has a 95% confidence interval -50 to 0.57 pixels with a p values of 0.0567. The test confirms that the observation is not statistically significant but only by a small margin. This result combined with the plots comparing the same active electrode but different returns suggest that a bigger area elbow return electrode can successfully mitigate sensory feedback in the return electrode, and therefore, produce a envelope with a more distal proximal bound.
+
+\  
+
+### Can Stimulation in the Finger Generate and Distally-Reffered Sensation Location?
+
+```{r message = FALSE}
+centroidData <- read_csv("centroid_dataRefElectrode.csv")%>%
+  clean_names() %>% 
+  #filter(subject %in% c("01", "02", "03", "04", "10", "11", "12")) %>%
+  mutate(location = factor(location)) %>%
+  mutate(temp1 = case_when(
+        strenght == 2 ~ "Maximum Comfortable",
+        strenght == 1 ~ "Threshold"),
+        strenghtCAT = factor(temp1)) %>%
+  mutate(temp2 = case_when(
+        location == 1 ~ "PL|PA1",
+        location == 2 ~ "IL|PA1",
+        location == 3 ~ "IA|PA1",
+        location == 4 ~ "PL|Elb",
+        location == 5 ~ "IL|Elb",
+        location == 6 ~ "IA|Elb",
+        location == 7 ~ "PL|PP1",
+        location == 8 ~ "IL|PP1",
+        location == 9 ~ "IA|PP1"),
+        locationCAT = factor(temp2)) %>%
+  mutate(temp3 = case_when(
+        location == 1 ~ "PL",
+        location == 2 ~ "IL",
+        location == 3 ~ "IA",
+        location == 4 ~ "PL",
+        location == 5 ~ "IL",
+        location == 6 ~ "IA",
+        location == 7 ~ "PL",
+        location == 8 ~ "IL",
+        location == 9 ~ "IA"),
+        ActiveElectrode = factor(temp3)) %>%
+  mutate(temp4 = case_when(
+        location == 1 ~ "PA1",
+        location == 2 ~ "PA1",
+        location == 3 ~ "PA1",
+        location == 4 ~ "Elb",
+        location == 5 ~ "Elb",
+        location == 6 ~ "Elb",
+        location == 7 ~ "PP1",
+        location == 8 ~ "PP1",
+        location == 9 ~ "PP1"),
+        ReturnElectrode = factor(temp4)) %>%
+  select(locationCAT, strenghtCAT, centroid, subject, ReturnElectrode, ActiveElectrode, min, max);
+centroidData.summary <- centroidData %>%
+    group_by(locationCAT, strenghtCAT) %>%
+    summarise (
+      aveMin= mean(min),
+      aveMax = mean(max),
+      aveCentroid = mean(centroid),
+    )
+  centroidData %>%
+    ggplot() +
+    geom_linerange(data = centroidData.summary, mapping = aes(x=locationCAT, ymin= aveMin, ymax=aveMax, color = factor(strenghtCAT, levels =c('Threshold', 'Maximum Comfortable'))),  position = position_dodge(width=1), size =4)+
+    geom_linerange(data = centroidData.summary, mapping = aes(x=locationCAT, ymin= aveCentroid-1, ymax=aveCentroid+1, group= factor(strenghtCAT, levels =c('Threshold', 'Maximum Comfortable'))),position =position_dodge(width=1), size =4)+
+    labs(title = "Vertical Centroid and Envelope for all Sensation with the Reference \n in the Active Electrode of Each Electrode Setup",
+         y = "vertical Centroid and Envelope (px)",
+         x = "Location",
+         caption = "0px is center of proximal phalange",
+          color = "Strenght") +
+    scale_color_manual(values = c("#4C46FF", "#FF3939"))+
+    theme_classic();
+```
+
+The graph shows the Threshold threshold having a more distal average vertical centroid, more proximal distal envelop bound, and a smaller envelope when compared to the maximum comfortable sensation threshold. Also, it appears electrode configurations with an active electrode in the proximal phalange have more distal sensations than the ones with active electrodes in the intermediate phalange. 
+
+```{r}
+minSel <- centroidData %>% filter(strenghtCAT == "Threshold") %>% select(centroid);
+maxSel <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable") %>% select(centroid);
+minAll <- centroidData %>% filter(strenghtCAT == "Threshold");
+maxAll <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable");
+```
+\  
+
+Average sensation for Threshold threshold
+```{r}
+minAll %$% t.test(centroid, conf.level = 0.95)
+wilcox.test(minAll$centroid, data = minAll,alternative = "greater")
+```
+\  
+
+Average sensation for maximum comfortable threshold
+```{r}
+maxAll %$% t.test(centroid, conf.level = 0.95)
+wilcox.test(maxAll$centroid,data = maxAll,alternative = "less")
+```
+\  
+
+Most Distal sensation for Threshold threshold
+```{r}
+minAll %$% t.test(max, conf.level = 0.95)
+wilcox.test(minAll$max,data = minAll,alternative = "greater")
+```
+\  
+
+Most Distal sensation for maximum comfortable threshold
+```{r}
+maxAll %$% t.test(max, conf.level = 0.95)
+wilcox.test(maxAll$max,data = maxAll,alternative = "greater")
+```
+
+With a 95% confidence interval, the sensation's vertical centroid is on average distally located from the active electrode's center at Threshold threshold, but the results for the vertical centroid at maximum comfortable threshold are not statistically significant. With a 95% confidence interval, the sensation's distal envelop bound is on average located distally from the center of the active electrode for both the Threshold and maximum comfortable thresholds. Furthermore the previous paired t-test that compared the distal bound of the sensation envelope showed with statistical significance that the bound was more distal for the maximum comfortable threshold. The 95% confidence interval of the average distal bound of the sensations is 61 to 77 pixels, were 50 pixels is approximately one phalange. Therefore, on average the distal bound of the sensation's envelop is located more than one phalange away from the center of the active electrode when stimulating at maximum comfortable threshold. 
+
+\  
+
+#### Clinically Significant Results
+
+##### Clinically Significant Distally-Refered Average Sensations 
+
+Clinically significant observations for the Threshold threshold
+```{r}
+total <- nrow(minAll)
+minCent50 <- minAll %>% filter(centroid >= 50)
+minCent50Count <- nrow(minCent50)
+```
+Number of observations with the average vertical centroid distal from the active electrode center by at least one phalange
+
+Total Observations: `r toString(total)`
+
+Clinically Significant Observations: `r toString(minCent50Count)`
+
+Percentage: `r toString(100*minCent50Count/total)`
+
+\  
+
+Clinically significant observations for the maximum comfortable threshold
+```{r}
+total <- nrow(maxAll)
+maxCent50 <- maxAll %>% filter(centroid >= 50)
+maxCent50Count <- nrow(maxCent50)
+```
+Number of observations with the average vertical centroid distal from the active electrode center by at least one phalange
+
+Total Observations: `r toString(total)`
+
+Clinically Significant Observations: `r toString(maxCent50Count)`
+
+Percentage: `r toString(100*maxCent50Count/total)`
+
+Only 9% of the sensation were in average (vertical centroid) distal from the center of the active electrode by at least one phalange for the maximum comfortable threshold compared to 17% for the Threshold threshold.
+
+\  
+
+Table with clinically significant observations For Threshold Threshold
+```{r}
+minCent50
+```
+
+\  
+
+Table with clinically significant observations For maximum comfortable threshold
+```{r}
+maxCent50
+```
+
+Subjects with clinically significant observations at Threshold threshold: 3, 4, 5, 6, 10, 11, 12
+
+Subjects with clinically significant observations at maximum comfortable threshold: 2, 3, 4, 6, 9, 11, 12
+
+Difference: Maximum Comfortable (1, 9) and Threshold threshold (10, 5)
+
+No clear improvement in the number of subjects who had a clinically significant result when comparing Threshold threshold and the maximum comfortable threshold. 
+
+\  
+
+##### Clinically Significant Distally-Refered Most Distal Sensations 
+
+Clinically significant observations for the Threshold threshold
+```{r}
+total <- nrow(minAll)
+minCent50 <- minAll %>% filter(max >= 50)
+minCent50Count <- nrow(minCent50)
+```
+Number of observations with the distal envelope boundary distally located from the active electrode center by at least one phalange
+
+Total Observations: `r toString(total)`
+
+Clinically Significant Observations: `r toString(minCent50Count)`
+
+Percentage: `r toString(100*minCent50Count/total)`
+
+\  
+
+Clinically significant observations for the maximum comfortable threshold
+```{r}
+total <- nrow(maxAll)
+maxCent50 <- maxAll %>% filter(max >= 50)
+maxCent50Count <- nrow(maxCent50)
+```
+Number of observations with the distal envelope boundary distally located from the active electrode center by at least one phalange
+
+Total Observations: `r toString(total)`
+
+Clinically Significant Observations: `r toString(maxCent50Count)`
+
+Percentage: `r toString(100*maxCent50Count/total)`
+
+70% of the trials produced distal sensations at least one phalange away from the center of the active electrode for the maximum comfortable threshold compared to 45% for the Threshold threshold.
+
+\  
+
+Table with clinically significant observations For Threshold threshold
+```{r}
+minCent50
+```
+
+\  
+
+Table with clinically significant observations for maximum comfortable threshold
+```{r}
+maxCent50
+```
+
+Subjects with clinically significant observations at Threshold threshold: 1, 2, 3, 4, 5, 6, 9, 10, 11, 12
+
+Subjects with clinically significant observations at maximum comfortable threshold: 1, 2, 3, 4, 5, 6, 9, 10, 11, 12
+
+Difference: None, both are missing subject 8
+
+No difference subject wise when comparing clinically significant results for the distal boundary of the sensation envelope
+
+
+### Is There A Statistically Significant Difference In the Vertical Centroid and Envelope of the Sensation Across Different Electrode Locations?
+
+Normality test centroid
+```{r}
+p1 <- ggplot(centroidData, aes(x = centroid)) +
+    geom_histogram(fill = "slateblue", col = "white", 
+                   binwidth = 1) + 
+    labs(x = "Centroid") +
+    theme_bw()
+
+p2 <- ggplot(centroidData, aes(sample = centroid)) +
+    geom_qq(col = "slateblue") + geom_qq_line(col = "red") + 
+    labs(y = "Centroid") +
+    theme_bw()
+
+p3 <- ggplot(centroidData, aes(x = "", y = centroid)) +
+    geom_violin() + 
+    geom_boxplot(fill = "slateblue", width = 0.3, notch = TRUE) + 
+    labs(y = "Centroid",
+         x = "") +
+    theme_bw() + 
+    coord_flip()
+
+p1 + p2 - p3 +
+  plot_layout(ncol = 1, height = c(3, 2))
+```
+
+Two way anova of max sensation threshold average vertical centroid
+```{r}
+two.way <- aov(centroid ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(centroid ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(centroid ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average vertical centroid
+```{r}
+two.wayMin <- aov(centroid ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(centroid ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(centroid~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+Two way anova of max sensation threshold average most distal sensation
+```{r}
+two.way <- aov(max ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(max ~ ActiveElectrode *ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(max ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Pairwise comparison using paired Wilcoxon signed-rank test
+```{r}
+pwc <- maxFried%>%wilcox_test(max ~ ActiveElectrode, p.adjust.method = "bonferroni")
+pwc
+```
+
+Two way anova of min sensation threshold average most distal sensation
+```{r}
+two.wayMin <- aov(max ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(max ~ ActiveElectrode *ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(max~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+Pairwise comparison using paired Wilcoxon signed-rank test
+```{r}
+pwc <- minFried%>%wilcox_test(max ~ ActiveElectrode, p.adjust.method = "bonferroni")
+pwc
+```
+
+Tukey test to compare active and return electrode categories in min threshold
+```{r}
+TukeyHSD(two.wayMin)
+```
+
+Two way anova of max sensation threshold average most proximal sensation
+```{r}
+two.way <- aov(min ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(min ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(min ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average most proximal sensation
+```{r}
+two.wayMin <- aov(min ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(min ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(min~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+\  
+
+### Centroid and Envelope of the Most Intense Sensation Reported in Each Trial
+
+```{r message = FALSE}
+centroidData <- read_csv("centroid_dataMaxSensation.csv")%>%
+  clean_names() %>% 
+  #filter(subject %in% c("01", "02", "03", "04", "10", "11", "12")) %>%
+  mutate(location = factor(location)) %>%
+  mutate(temp1 = case_when(
+        strenght == 2 ~ "Maximum Comfortable",
+        strenght == 1 ~ "Threshold"),
+        strenghtCAT = factor(temp1)) %>%
+  mutate(temp2 = case_when(
+        location == 1 ~ "PL|PA1",
+        location == 2 ~ "IL|PA1",
+        location == 3 ~ "IA|PA1",
+        location == 4 ~ "PL|Elb",
+        location == 5 ~ "IL|Elb",
+        location == 6 ~ "IA|Elb",
+        location == 7 ~ "PL|PP1",
+        location == 8 ~ "IL|PP1",
+        location == 9 ~ "IA|PP1"),
+        locationCAT = factor(temp2)) %>%
+  mutate(temp3 = case_when(
+        location == 1 ~ "PL",
+        location == 2 ~ "IL",
+        location == 3 ~ "IA",
+        location == 4 ~ "PL",
+        location == 5 ~ "IL",
+        location == 6 ~ "IA",
+        location == 7 ~ "PL",
+        location == 8 ~ "IL",
+        location == 9 ~ "IA"),
+        ActiveElectrode = factor(temp3)) %>%
+  mutate(temp4 = case_when(
+        location == 1 ~ "PA1",
+        location == 2 ~ "PA1",
+        location == 3 ~ "PA1",
+        location == 4 ~ "Elb",
+        location == 5 ~ "Elb",
+        location == 6 ~ "Elb",
+        location == 7 ~ "PP1",
+        location == 8 ~ "PP1",
+        location == 9 ~ "PP1"),
+        ReturnElectrode = factor(temp4)) %>%
+  select(locationCAT, strenghtCAT, centroid, subject, ReturnElectrode, ActiveElectrode, min, max);
+centroidData.summary <- centroidData %>%
+    group_by(locationCAT, strenghtCAT) %>%
+    summarise (
+      aveMin= mean(min),
+      aveMax = mean(max),
+      aveCentroid = mean(centroid),
+    )
+  centroidData %>%
+    ggplot() +
+    geom_linerange(data = centroidData.summary, mapping = aes(x=locationCAT, ymin= aveMin, ymax=aveMax, color = factor(strenghtCAT, levels =c('Threshold', 'Maximum Comfortable'))),  position = position_dodge(width=1), size =4)+
+    geom_linerange(data = centroidData.summary, mapping = aes(x=locationCAT, ymin= aveCentroid-1, ymax=aveCentroid+1, group= factor(strenghtCAT, levels =c('Threshold', 'Maximum Comfortable'))),position =position_dodge(width=1), size =4)+
+    labs(title = "Vertical Centroid and Envelop for the Maximum Intensity Sensation \n in each Trial with the same Reference Point for all Electrode Combinations",
+         y = " vertical Centroid and Envelope (px)",
+         x = "Location",
+         caption = "0px is center of proximal phalange",
+          color = "Strenght") +
+    scale_color_manual(values = c("#4C46FF", "#FF3939"))+
+    theme_classic();
+```
+
+From Threshold to maximum comfortable threshold, the average vertical centroid becomes more proximal, the envelope expands, and the average proximal and distal envelope boundaries become more proximal and distal respectively across all locations. 
+
+\  
+
+### Does Sensation Become more Distal as Stimualtion Strenght is Increased?
+
+Vertical Centroid (in average)
+```{r}
+minSel <- centroidData %>% filter(strenghtCAT == "Threshold") %>% select(centroid);
+maxSel <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable") %>% select(centroid);
+minAll <- centroidData %>% filter(strenghtCAT == "Threshold");
+maxAll <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable");
+centroidData %$% t.test(centroid ~ strenghtCAT, paired = TRUE, conf.level = 0.95)
+wilcox.test(centroid ~ strenghtCAT,data = centroidData,paired = TRUE,alternative = "less")
+```
+
+With 95% confidence, the average vertical centroid of the most intense sensation is more distal for the Threshold  threshold that for the maximum comfortable threshold.
+
+\  
+
+Most Distal Sensation
+```{r}
+minSel <- centroidData %>% filter(strenghtCAT == "Threshold") %>% select(max);
+maxSel <- centroidData %>% filter(strenghtCAT == "Maximum Comfortable") %>% select(max);
+centroidData %$% t.test(max ~ strenghtCAT, paired = TRUE, conf.level = 0.95)
+wilcox.test(max ~ strenghtCAT,data = centroidData,paired = TRUE,alternative = "greater")
+```
+
+With 95% confidence, the most distal highest intensity sensation is more distal for the maximum comfortable threshold than for the Threshold threshold. 
+
+\  
+
+#### Clinically Significant Diference in Most Distal Sensation Between Threshold Threshold and Maximum Comfortable Threshold
+
+Total number observations where the difference for the distal envelop boundary between the Threshold threshold and the maximum comfortable threshold is more than one phalange
+```{r}
+diff = maxSel-minSel
+total <- nrow(diff)
+diff <- diff %>% filter(diff >= 50)
+sig <- nrow(diff)
+```
+
+Total Observations: `r toString(total)`
+
+Significant Observations: `r toString(sig)`
+
+Percentage: `r toString(100*sig/total)`
+
+22% of the trials had the most distal highest intensity sensation move distally by at least one phalange when increasing the stimulation parameters from the Threshold threshold to the maximum comfortable threshold. 
+
+\  
+
+#### How Many More Subjects had Clinically Significant Distal Sensations When Comparing Sensation Locations at Threshold Threshold and Maximum Comfortable Threshold
+
+```{r}
+minAll75 <- minAll %>% filter(max >= 75)
+sigMin <- nrow(minAll75)
+maxAll75 <- maxAll %>% filter(max >= 75)
+sigMax <- nrow(maxAll75)
+```
+Number of observations that generated a sensation in the distal phalange:
+
+Threshold threshold clinically significant trials: `r toString(sigMin)`
+
+Maximum comfortable threshold clinically significant trials: `r toString(sigMax)`
+
+Difference:`r toString(sigMax-sigMin)`
+
+15 more observation reported a maximum intensity sensation for the maximum comfortable threshold than for the Threshold threshold. 
+
+Table with clinically significant observations for Threshold threshold
+```{r}
+minAll75
+```
+
+\  
+
+Table with clinically significant observations For maximum comfortable threshold
+```{r}
+maxAll75
+```
+
+Subjects with clinically significant observations at Threshold threshold:All 
+
+Subjects with clinically significant observations at maximum comfortable threshold: All
+
+Difference: None
+
+All subjects reported a maximum intensity sensation in the distal phalange at both the Threshold threshold and the maximum comfortable threshold.
+
+\  
+
+#### Does the Sensation Envelop Size Increase as Stimualtion Strenght is Increased?
+
+```{r}
+centroidData %$% t.test(max-min ~ strenghtCAT, paired = TRUE, conf.level = 0.95)
+wilcox.test(max-min ~ strenghtCAT,data = centroidData,paired = TRUE,alternative = "greater")
+```
+
+With statistical significance, the envelop size increase as stimulation strength increases for the maximum intensity sensation by an average of 65px or 1.3 phalanges.
+
+\  
+
+### Is There A Statistically Significant Difference In the Centroid and Envelope of the Sensation Across Different Electrode Locations for the Most Instense Sensation Only?
+
+Two way anova of max sensation threshold average vertical centroid
+```{r}
+two.way <- aov(centroid ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(centroid ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(centroid ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average vertical centroid
+```{r}
+two.wayMin <- aov(centroid ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(centroid ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(centroid ~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+Two way anova of max sensation threshold average most distal sensation
+```{r}
+two.way <- aov(max ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(max ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(max ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average most distal sensation
+```{r}
+two.wayMin <- aov(max ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(max ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(max ~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+Tukey test to compare active and return electrode categories in min sensation threshold
+```{r}
+TukeyHSD(two.wayMin)
+```
+
+Two way anova of max sensation threshold average most proximal sensation
+```{r}
+two.way <- aov(min ~ ActiveElectrode * ReturnElectrode, data = maxAll)
+summary(two.way)
+maxFried <- aggregate(min ~ ActiveElectrode +ReturnElectrode, data= maxAll, mean)
+resFried <-friedman.test(min ~ ActiveElectrode |ReturnElectrode, data = maxFried)
+resFried
+```
+
+Two way anova of min sensation threshold average most proximal sensation
+```{r}
+two.wayMin <- aov(min ~ ActiveElectrode * ReturnElectrode, data = minAll)
+summary(two.wayMin)
+minFried <- aggregate(min ~ ActiveElectrode +ReturnElectrode, data= minAll, mean)
+resFriedMin <-friedman.test(min~ ActiveElectrode |ReturnElectrode, data = minFried)
+resFriedMin
+```
+
+The electrode locations did not have statistically significant results on any of the outcomes, but the comparison of the return electrodes for the most proximal highest intensity sensation had the most significant outcome. The TukeyHSD analysis return p values of 0.053 and 0.1 when comparing the elbow electrode to the anterior and posterior palm electrodes respectively. On average the elbow produced a more distal proximal envelop bound when compared to the other two return electrodes.
+
+
+
