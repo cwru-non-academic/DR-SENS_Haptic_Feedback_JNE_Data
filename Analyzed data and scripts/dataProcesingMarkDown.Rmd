@@ -21,14 +21,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, message = FALSE, warning = FALSE}
 library(broom);
-library(equatiomatic);
+#library(equatiomatic);
 library(ggrepel);
 library(janitor);
 library(knitr);
 library(magrittr);
 library(naniar);
 library(patchwork);
-library(rstanarm);
+#library(rstanarm);
 library(tidyverse);
 library("readxl");
 library(ggforce);
@@ -86,10 +86,6 @@ IL-Intermediate Phalange's Lateral Face Electrode
 IA-Intermediate Phalange's Anterior Face Electrode
 \  
 
-## Location of the Electrodes
-
-![](labeledA.jpg){#id .class width=200 height=160px}![](labeledP.jpg){#id .class width=200 height=160px}![](labeledL.jpg){#id .class width=200 height=160px}
-\  
 
 # Exploratory Data Analysis
 
@@ -251,8 +247,8 @@ centroidData <- read_csv("centroid_data.csv")%>%
       geom_vline(xintercept= 6.5, size=0.5)+
       geom_vline(xintercept= 7.5, size=0.5)+
       geom_vline(xintercept= 8.5, size=0.5)+
-    labs(title = "Average Metrics of the Sensations for All Electrodes and Subjects",
-         y = "Sensation Location (phalanges)",
+    labs(title = "Average Metrics of the Sensations for All Electrodes and Participants",
+         y = "Sensation Location (Phalanges)",
          x = "Electrode Combinations") +
       ylim(-1.9,2.9)+
     scale_fill_manual(name="Pulse Width",
@@ -269,7 +265,7 @@ centroidData <- read_csv("centroid_data.csv")%>%
       guides(fill = guide_legend(override.aes = list(shape = 21)), shape = "none")+
       theme(legend.position = "bottom")
   
-  ggsave("All_Envelopes.png")
+  ggsave("All_Envelopes.jpg")
     
     centroidData.summaryS <- centroidData %>%
       filter(subject=="4") %>%
@@ -296,8 +292,8 @@ centroidData <- read_csv("centroid_data.csv")%>%
       geom_vline(xintercept= 6.5, size=0.5)+
       geom_vline(xintercept= 7.5, size=0.5)+
       geom_vline(xintercept= 8.5, size=0.5)+
-    labs(title = "Metrics of one Subject's Sensations for All Electrodes",
-         y = "Sensation Location (phalanges)",
+    labs(title = "Metrics of One Participant's Sensations for All Electrodes",
+         y = "Sensation Location (Phalanges)",
          x = "Electrode Combinations") +
       ylim(-1.9,2.9)+
     scale_fill_manual(name="Pulse Width",
@@ -310,20 +306,20 @@ centroidData <- read_csv("centroid_data.csv")%>%
       guides(fill = "none")+
       theme(legend.position = "bottom")
     
-    ggsave("S4_Envelopes.png")
+    ggsave("S4_Envelopes.jpg")
     
   centroidData %>%
     ggplot() +
     geom_tile(data = centroidData.summaryD, mapping = aes(x=locationCAT, y=subject, fill= distalBySCAT))+
-      labs(title = "Sensations with Distal Aspects at Perception Threshold, \n Maximum Comfortable Limit, or Both.",
-         y = "Subjects",
+      labs(title = "Sensations With Distal Aspects at Perception Threshold, \nMaximum Comfortable Limit, or Both.",
+         y = "Participants",
          x = "Electrode Locations",
          fill = "Distal aspect at")+
       scale_fill_manual(name="Distal Aspects at",
         breaks=c("None", "Perception", "Maximum", "Both"),
         values = c("None" = "#ffffff", "Perception"="#4C46FF", "Maximum" = "#FF3939","Both" = "#8fe3a5"))
   
-  ggsave("distal_sens_subj.png")
+  ggsave("distal_sens_subj.jpg")
 ```
 
 From Threshold to maximum comfortable threshold, the average vertical centroid becomes more proximal, the envelope expands, and the average proximal and distal envelope boundaries become more proximal and distal respectively across all locations. 

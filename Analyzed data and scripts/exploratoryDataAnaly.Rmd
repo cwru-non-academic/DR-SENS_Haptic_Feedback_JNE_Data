@@ -21,14 +21,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, message = FALSE, warning = FALSE}
 library(broom);
-library(equatiomatic);
+#library(equatiomatic);
 library(ggrepel);
 library(janitor);
 library(knitr);
 library(magrittr);
 library(naniar);
 library(patchwork);
-library(rstanarm);
+#library(rstanarm);
 library(tidyverse);
 library(forecast)
 library("readxl");
@@ -82,7 +82,7 @@ usefulData %>%
         breaks=c("Finger-Finger", "Palm-Palm", "Finger-Palm"),
         values = c("Finger-Finger" = "#349beb", "Palm-Palm"="#eb34c3", "Finger-Palm"="#eba534"))+
     theme(legend.position="bottom")
-ggsave("explo_res.eps")
+ggsave("explo_res.jpg")
 ```
 
 Electrodes
@@ -102,7 +102,7 @@ electrodeData.sum %>%
          y = "Useful Average Percentage (%)",
          x = "Electrode Postion")+
   theme(axis.text = element_text(size = 11))   
-ggsave("explo_res_elec.eps")
+ggsave("explo_res_elec.jpg")
 ```
 
 Combinations
@@ -122,7 +122,7 @@ combinationData.sum %>%
          y = "Useful Average Percentage (%)",
          x = "Electrode Combination")+
   theme(axis.text = element_text(size = 11))
-ggsave("explo_res_combination.eps")
+ggsave("explo_res_combination.jpg")
 ```
 
 Polarity
@@ -211,14 +211,14 @@ polarityData.sum %>%
     geom_bar(stat='identity',position = position_dodge(width=0.9))+
     geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd),position = position_dodge(width=0.9), width =0.3)+
   labs(title = "Polarity Dependent (PD) and Indepndent (PI) Trials per Electrode Combination",
-         y = "Average percentage of trials with useful percepts (%)",
+         y = "Average Percentage of Trials With Useful Percepts (%)",
          x = "Electrode Combination")+
   scale_fill_manual(name="",
         breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
         values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
-        labels=c("PD Cathodic pulse on\nmore distal electrode", "PD Cathodic pulse on\nmore proximal electrode" , "PD Cathode/anode on same\nphalange or palm region", "PI useful\ntrials"))+
+        labels=c("PD Cathodic Pulse on\nMore Distal Electrode", "PD Cathodic Pulse on\nMore Proximal Electrode" , "PD Cathode/Anode on Same\nPhalange or Palm Region", "PI Useful\nTrials"))+
   theme(legend.position="bottom",axis.text = element_text(size = 11))
-ggsave("explo_res_polarityComb.eps")
+ggsave("explo_res_polarityComb.jpg")
 
 polarityDataSub.sum <- polarityData %>%
   group_by(subject, pulse) %>%
@@ -234,15 +234,15 @@ polarityDataSub.sum %>%
     ggplot(data = polarityDataSub.sum, mapping = aes(x=subject, y=mean, fill = factor(pulse, levels =c('Anodic', 'Cathodic', 'Neither(Same area)', 'Useful')))) +
     geom_bar(stat='identity',position = position_dodge(width=0.9))+
     geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd),position = position_dodge(width=0.9), width =0.3)+
-  labs(title = "Polarity Dependent (PD) and Indepndent (PI) Trials for each Subject",
-         y = "Average percentage of trials with useful percepts (%)",
-         x = "Subject")+
+  labs(title = "Polarity Dependent (PD) and Indepndent (PI) Trials for Each Participant",
+         y = "Average Percentage of Trials With Useful Percepts (%)",
+         x = "Participants")+
   scale_fill_manual(name="",
         breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
         values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
-        labels=c("PD Cathodic pulse on\nmore distal electrode", "PD Cathodic pulse on\nmore proximal electrode" , "PD Cathode/anode on same\nphalange or palm region", "PI useful\ntrials"))+
+        labels=c("PD Cathodic Pulse on\nMore Distal Electrode", "PD Cathodic Pulse on\nMore Proximal Electrode" , "PD Cathode/Anode on Same\nPhalange or Palm Region", "PI Useful\nTrials"))+
   theme(legend.position="bottom",axis.text = element_text(size = 11))
-ggsave("explo_res_polaritySub.eps")
+ggsave("explo_res_polaritySub.jpg")
 ```
 
 stats data plot
@@ -254,8 +254,8 @@ statsIntensityData %>%
       geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd, color = factor(stimulation_instensity, levels =c('Perception Threshold', 'Maximum Comfortable'))), width =0.4, position =position_dodge(width=0.5))+
   geom_signif(xmin=c(0.875, 1.875, 2.875), xmax=c(1.125, 2.125, 3.125),
                               y_position=c(3, 3.75, 2), annotation=c("***", "***","*")) +
-    labs(title = "The effects of Stimulation Intensity Across All Electrodes and Subjects",
-         y = "Sensation Location (phalanges)",
+    labs(title = "The Effects of Stimulation Intensity Across All Electrodes and Participants",
+         y = "Sensation Location (Phalanges)",
          x = "Metric") +
       ylim(-0.5,4)+
     scale_fill_manual(name="Pulse Width",
@@ -267,7 +267,7 @@ statsIntensityData %>%
   guides(fill = guide_legend(override.aes = list(shape = 21)), shape = "none")+
       theme(legend.position = "bottom")
   
-  ggsave("Stats_All_Envelopes.eps")
+  ggsave("Stats_All_Envelopes.jpg")
 ```
 
 
