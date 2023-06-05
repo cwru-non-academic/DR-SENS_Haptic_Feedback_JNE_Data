@@ -263,7 +263,7 @@ centroidData <- read_csv("centroid_data.csv")%>%
       #annotate(geom="text", x=5.5, y=0.93, label="Electrode", color="#EBA134")+
       #guides(fill = guide_legend(override.aes = list(shape = 21)))+
       guides(fill = guide_legend(override.aes = list(shape = 21)), shape = "none")+
-      theme(legend.position = "bottom")
+      theme(legend.position = "bottom", axis.text=element_text(size=13), axis.title=element_text(size=14), legend.text=element_text(size=13),legend.title =element_text(size=14), plot.title=element_text(size=15))
   
   ggsave("All_Envelopes.jpg")
     
@@ -304,7 +304,7 @@ centroidData <- read_csv("centroid_data.csv")%>%
       #annotate(geom="text", x=5.5, y=1.09, label="Active", color="#EBA134")+
       #annotate(geom="text", x=5.5, y=0.93, label="Electrode", color="#EBA134")+
       guides(fill = "none")+
-      theme(legend.position = "bottom")
+      theme(legend.position = "bottom", axis.text=element_text(size=13), axis.title=element_text(size=14), legend.text=element_text(size=13),legend.title =element_text(size=14), plot.title=element_text(size=15))
     
     ggsave("S4_Envelopes.jpg")
     
@@ -317,7 +317,9 @@ centroidData <- read_csv("centroid_data.csv")%>%
          fill = "Distal aspect at")+
       scale_fill_manual(name="Distal Aspects at",
         breaks=c("None", "Perception", "Maximum", "Both"),
-        values = c("None" = "#ffffff", "Perception"="#4C46FF", "Maximum" = "#FF3939","Both" = "#8fe3a5"))
+        values = c("None" = "#ffffff", "Perception"="#4C46FF", "Maximum" = "#FF3939","Both" = "#8fe3a5"),
+        labels =c("Neither","Perception", "Maximum", "Both"))+
+    theme(legend.position = "bottom", axis.text=element_text(size=13), axis.title=element_text(size=14), legend.text=element_text(size=13),legend.title =element_text(size=14), plot.title=element_text(size=15), legend.key=element_rect(colour="black"))
   
   ggsave("distal_sens_subj.jpg")
 ```

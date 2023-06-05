@@ -81,7 +81,7 @@ usefulData %>%
     scale_color_manual(name="Legend",
         breaks=c("Finger-Finger", "Palm-Palm", "Finger-Palm"),
         values = c("Finger-Finger" = "#349beb", "Palm-Palm"="#eb34c3", "Finger-Palm"="#eba534"))+
-    theme(legend.position="bottom")
+    theme(legend.position = "bottom", axis.text=element_text(size=13), axis.title=element_text(size=14), legend.text=element_text(size=13),legend.title =element_text(size=14), plot.title=element_text(size=15))
 ggsave("explo_res.jpg")
 ```
 
@@ -101,7 +101,7 @@ electrodeData.sum %>%
   labs(title = "Percentage of Useful Trials per Total Trials for Each Electrode Position",
          y = "Useful Average Percentage (%)",
          x = "Electrode Postion")+
-  theme(axis.text = element_text(size = 11))   
+  theme(legend.position = "bottom", axis.text=element_text(size=12), axis.title=element_text(size=13), legend.text=element_text(size=12),legend.title =element_text(size=13), plot.title=element_text(size=14))   
 ggsave("explo_res_elec.jpg")
 ```
 
@@ -121,7 +121,7 @@ combinationData.sum %>%
     labs(title = "Percentage of Useful Trials per Total Trials for Each Electrode Combination",
          y = "Useful Average Percentage (%)",
          x = "Electrode Combination")+
-  theme(axis.text = element_text(size = 11))
+  theme(legend.position = "bottom", axis.text=element_text(size=12), axis.title=element_text(size=13), legend.text=element_text(size=12),legend.title =element_text(size=13), plot.title=element_text(size=14))
 ggsave("explo_res_combination.jpg")
 ```
 
@@ -217,7 +217,7 @@ polarityData.sum %>%
         breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
         values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
         labels=c("PD Cathodic Pulse on\nMore Distal Electrode", "PD Cathodic Pulse on\nMore Proximal Electrode" , "PD Cathode/Anode on Same\nPhalange or Palm Region", "PI Useful\nTrials"))+
-  theme(legend.position="bottom",axis.text = element_text(size = 11))
+  theme(legend.position = "bottom", axis.text=element_text(size=10), axis.title=element_text(size=11), legend.text=element_text(size=9),legend.title =element_text(size=10), plot.title=element_text(size=13))
 ggsave("explo_res_polarityComb.jpg")
 
 polarityDataSub.sum <- polarityData %>%
@@ -241,7 +241,7 @@ polarityDataSub.sum %>%
         breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
         values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
         labels=c("PD Cathodic Pulse on\nMore Distal Electrode", "PD Cathodic Pulse on\nMore Proximal Electrode" , "PD Cathode/Anode on Same\nPhalange or Palm Region", "PI Useful\nTrials"))+
-  theme(legend.position="bottom",axis.text = element_text(size = 11))
+  theme(legend.position = "bottom", axis.text=element_text(size=10), axis.title=element_text(size=11), legend.text=element_text(size=9),legend.title =element_text(size=10), plot.title=element_text(size=13))
 ggsave("explo_res_polaritySub.jpg")
 ```
 
@@ -265,7 +265,7 @@ statsIntensityData %>%
         breaks=c("Perception Threshold", "Maximum Comfortable", "Active Electrode"),
         values = c("Perception Threshold" = "#4C46FF", "Maximum Comfortable"="#FF3939"))+
   guides(fill = guide_legend(override.aes = list(shape = 21)), shape = "none")+
-      theme(legend.position = "bottom")
+      theme(legend.position = "bottom", axis.text=element_text(size=11), axis.title=element_text(size=13), legend.text=element_text(size=11),legend.title =element_text(size=13), plot.title=element_text(size=14))
   
   ggsave("Stats_All_Envelopes.jpg")
 ```
