@@ -969,9 +969,9 @@ Percentage: `r toString(100*sig/total)`
 #### How Many More Subjects had Clinically Significant Distal Sensations When Comparing Sensation Locations at Threshold Threshold and Maximum Comfortable Threshold
 
 ```{r}
-minAll75 <- minAll %>% filter(max >= 75)
+minAll75 <- minAll %>% filter(max >= 50)
 sigMin <- nrow(minAll75)
-maxAll75 <- maxAll %>% filter(max >= 75)
+maxAll75 <- maxAll %>% filter(max >= 55)
 sigMax <- nrow(maxAll75)
 ```
 Number of observations that generated a sensation in the distal phalange:

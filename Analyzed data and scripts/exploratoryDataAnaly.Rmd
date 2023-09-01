@@ -91,18 +91,21 @@ electrodeData.sum <- electrodeData %>%
   group_by(electrode) %>%
   summarise( 
     n=n(),
+    percentage=mean(percentage),
     mean=mean(percentage),
     sd=sd(percentage)
   )
 electrodeData.sum %>%
-    ggplot(data = electrodeData.sum, mapping = aes(x=reorder(electrode, -mean), y=mean)) +
-    geom_bar(stat='identity', fill = "#349beb")+
-    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd), width =0.3)+
+    ggplot(data = electrodeData, mapping = aes(x=reorder(electrode, -percentage), y=percentage)) +
+    geom_bar(data = electrodeData.sum, stat='identity', fill = "#abd5f5", color ="#349beb")+
+    #geom_errorbar(data = electrodeData.sum, mapping =aes(ymin=mean-sd, ymax=mean+sd), width =0.3)+
+    geom_point(color="#349beb", alpha = 3/5, size = 4)+
   labs(title = "Percentage of Useful Trials per Total Trials for Each Electrode Position",
          y = "Useful Average Percentage (%)",
          x = "Electrode Postion")+
   theme(legend.position = "bottom", axis.text=element_text(size=12), axis.title=element_text(size=13), legend.text=element_text(size=12),legend.title =element_text(size=13), plot.title=element_text(size=14))   
-ggsave("explo_res_elec.jpg")
+ggsave("explo_res_elecR1.jpg")
+electrodeData.sum
 ```
 
 Combinations
@@ -111,18 +114,21 @@ combinationData.sum <- combinationData %>%
   group_by(combination) %>%
   summarise( 
     n=n(),
+    percentage=mean(percentage),
     mean=mean(percentage),
     sd=sd(percentage)
   )
 combinationData.sum %>%
-    ggplot(data = combinationData.sum, mapping = aes(x=reorder(combination, -mean), y=mean)) +
-    geom_bar(stat='identity', fill = "#349beb")+
-    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd), width =0.3)+
+    ggplot(data = combinationData, mapping = aes(x=reorder(combination, -percentage), y=percentage)) +
+    geom_bar(data=combinationData.sum,stat='identity', fill = "#abd5f5", color ="#349beb")+
+    #geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd), width =0.3)+
+    geom_point(color="#349beb", alpha = 3/5, size = 4)+
     labs(title = "Percentage of Useful Trials per Total Trials for Each Electrode Combination",
          y = "Useful Average Percentage (%)",
          x = "Electrode Combination")+
   theme(legend.position = "bottom", axis.text=element_text(size=12), axis.title=element_text(size=13), legend.text=element_text(size=12),legend.title =element_text(size=13), plot.title=element_text(size=14))
-ggsave("explo_res_combination.jpg")
+ggsave("explo_res_combinationR1.jpg")
+combinationData.sum 
 ```
 
 Polarity
@@ -132,11 +138,28 @@ polarityData.sum <- polarityData %>%
   summarise( 
     n=n(),
     mean=mean(percentage),
+    percentage=mean(percentage),
     sd=sd(percentage),
     combination=combination,
     pulse=pulse
   )
 ```
+
+Percentage per pulse type count
+```{r}
+polarityData.pulse <- polarityData %>%
+  group_by(pulse) %>%
+  summarise( 
+    n=n(),
+    use=sum(useful_for_polarity),
+    mean=mean(percentage),
+    sd=sd(percentage),
+    combination=combination,
+    pulse=pulse
+  )
+polarityData.pulse
+```
+
 
 Normality test polarity
 ```{r}
@@ -179,6 +202,17 @@ polarityData.f <- polarityData2 %>%
 
 polarityData.f
 
+polairtyData.a <- polarityData2 %>%
+  summarise(
+    count = n(),
+    mean = mean(useful_for_polarity, na.rm = TRUE),
+    sd = sd(useful_for_polarity, na.rm = TRUE),
+    median = median(useful_for_polarity, na.rm = TRUE),
+    useful_for_polarity= useful_for_polarity
+  )
+
+polairtyData.a
+
 kruskal.test(useful_for_polarity ~ pulse, data = polarityData.f)
 
 dunnTest(useful_for_polarity ~ pulse, data=polarityData.f,method="bonferroni")
@@ -207,18 +241,23 @@ dunnTest(useful_for_polarity ~ pulse, data=polarityData.f,method="bonferroni")
 
 ```{r}
 polarityData.sum %>%
-    ggplot(data = polarityData.sum, mapping = aes(x=combination, y=mean, fill = factor(pulse, levels =c('Anodic', 'Cathodic', 'Neither(Same area)', 'Useful')))) +
-    geom_bar(stat='identity',position = position_dodge(width=0.9))+
-    geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd),position = position_dodge(width=0.9), width =0.3)+
+    ggplot(data = polarityData, mapping = aes(x=combination, y=percentage, fill = factor(pulse, levels =c('Anodic', 'Cathodic', 'Neither(Same area)', 'Useful')), color = factor(pulse, levels =c('Anodic', 'Cathodic', 'Neither(Same area)', 'Useful')))) +
+    geom_bar(data = polarityData.sum, stat='identity',position = position_dodge(width=0.9), alpha = 1/8)+
+    geom_point(alpha = 3/5, size = 3, position = position_dodge(width=0.9))+
+    #geom_errorbar(mapping =aes(ymin=mean-sd, ymax=mean+sd),position = position_dodge(width=0.9), width =0.3)+
   labs(title = "Polarity Dependent (PD) and Indepndent (PI) Trials per Electrode Combination",
          y = "Average Percentage of Trials With Useful Percepts (%)",
          x = "Electrode Combination")+
+  scale_color_manual(name="",
+        breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
+        values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
+        labels=c("PD Cathodic Leading on\nMore Distal Electrode", "PD Cathodic Leading on\nMore Proximal Electrode" , "PD Electrodes on Same\nPhalanx or Palm Region", "PI Useful\nTrials"))+
   scale_fill_manual(name="",
         breaks=c("Anodic", "Cathodic" , "Neither(Same area)", "Useful"),
         values = c("Anodic" = "#349beb", "Cathodic"="#eb34c3", "Neither(Same area)"="#eba534", "Useful"="#32b347"),
-        labels=c("PD Cathodic Pulse on\nMore Distal Electrode", "PD Cathodic Pulse on\nMore Proximal Electrode" , "PD Cathode/Anode on Same\nPhalange or Palm Region", "PI Useful\nTrials"))+
+        labels=c("PD Cathodic Leading on\nMore Distal Electrode", "PD Cathodic Leading on\nMore Proximal Electrode" , "PD Electrodes on Same\nPhalanx or Palm Region", "PI Useful\nTrials"))+
   theme(legend.position = "bottom", axis.text=element_text(size=10), axis.title=element_text(size=11), legend.text=element_text(size=9),legend.title =element_text(size=10), plot.title=element_text(size=13))
-ggsave("explo_res_polarityComb.jpg")
+ggsave("explo_res_polarityCombR1.jpg")
 
 polarityDataSub.sum <- polarityData %>%
   group_by(subject, pulse) %>%
